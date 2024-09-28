@@ -9,18 +9,28 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
+	"github.com/rs/cors"
 )
 
 type Server struct {
-	httpServer *http.Server
-	gcsClient  *storage.Client
-	config     *config.Config
+	httpServer  *http.Server
+	gcsClient   *storage.Client
+	config      *config.Config
+	corsHandler *cors.Cors
 }
 
 func NewServer(gcsClient *storage.Client, cfg *config.Config) *Server {
+	corsHandler := cors.New(cors.Options{
+		AllowedOrigins:   cfg.CORSAllowedOrigins,
+		AllowedMethods:   cfg.CORSAllowedMethods,
+		AllowedHeaders:   cfg.CORSAllowedHeaders,
+		AllowCredentials: cfg.CORSAllowCredentials,
+	})
+
 	return &Server{
-		gcsClient: gcsClient,
-		config:    cfg,
+		gcsClient:   gcsClient,
+		config:      cfg,
+		corsHandler: corsHandler,
 	}
 }
 
@@ -68,9 +78,11 @@ func (s *Server) Start(addr string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.HandleFile)
 
+	handler := s.corsHandler.Handler(mux)
+
 	s.httpServer = &http.Server{
 		Addr:    addr,
-		Handler: mux,
+		Handler: handler,
 	}
 
 	return s.httpServer.ListenAndServe()
